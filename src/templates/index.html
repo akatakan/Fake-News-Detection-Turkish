@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="{{ url_for('static',filename='styles/style.css') }}" rel="stylesheet">
+    <title>Sahte Haber Tespiti</title>
+</head>
+<body>
+    <main>
+        <section>
+            <h1>Sahte Haber Tespiti</h1>
+        </section>
+        <section>
+            <div class="text-area">
+                <textarea rows="10" cols="40" name="news-area" form="news">Haberinizi buraya giriniz...</textarea>
+            </div>
+        </section>
+        <section>
+            <div class="button-area">
+                <form action="/" id="news" name="news" method="post">
+                    <input type="submit" value="Tespit Et" class="submitButton">
+                </form>
+            </div>
+            <div class="result">
+                {% block content %}
+                    {% if prob %}
+                        {% if pred ==True %}
+                            <p class="real" style="display: flex;justify-content: center; color: green;">Yazdığınız haber %{{prob}} oranında doğru olarak tespit edilmiştir.</p>
+                        {% else %}
+                            <p class="fake" style="display: flex;justify-content: center; color:red;">Yazdığınız haber %{{prob}} oranında sahte olarak tespit edilmiştir.</p>
+                        {% endif %}
+                    {% elif error%}
+                            <p class="error" style="display: flex;justify-content: center;color:red;">{{error}}</p>
+                    {%endif%}
+                {% endblock %}
+            </div>
+        </section>
+        <section>
+            <div class="explanation">
+                <p>Gönderdiğiniz haberi bir yapay zeka modeli kullanarak sahte veya doğru olarak sınıflandırır.
+                Kullanılan model bir LSTM modelidir.Modeli eğitmek için yaklaşık 4500 haber kullanılmıştır.</p>
+            </div>
+        </section>
+    </main>
+    <footer>
+        <p>Atakan Ak tarafından Erciyes Üniversitesi Design Project Ödevi olarak tasarlanmıştır.</p>
+    </footer>
+</body>
+</html>
