@@ -1,0 +1,18 @@
+[project]
+name = "fake-news-detection-turkish"
+version = "0.1.0"
+description = "Turkish fake news classifier using LSTM"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "advertools>=0.18.0",
+    "flask>=3.1.3",
+    "lxml>=6.1.1",
+    "nltk>=3.9.4",
+    "numpy>=2.2.6",
+    "pandas>=2.3.3",
+    "requests>=2.34.2",
+    "scikit-learn>=1.7.2",
+    "tensorflow>=2.21.0",
+    "trnlp>=0.2.3a0",
+]

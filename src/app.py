@@ -1,4 +1,8 @@
-from flask import Flask,render_template,request
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
+
+from flask import Flask, render_template, request
 import model.prediction_model as yapayZeka
 
 
@@ -10,7 +14,7 @@ def index():
             return render_template("index.html")
     else:
         text = request.form["news-area"]
-        if text is None:
+        if not text.strip():
             return render_template("index.html")
         else:
             if len(text.split()) > 4:

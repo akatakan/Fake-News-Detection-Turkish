@@ -2,50 +2,60 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="{{ url_for('static',filename='styles/style.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='styles/style.css') }}" rel="stylesheet">
     <title>Sahte Haber Tespiti</title>
 </head>
 <body>
-    <main>
-        <section>
+    <div class="wrapper">
+        <header>
+            <div class="logo">🔍</div>
             <h1>Sahte Haber Tespiti</h1>
-        </section>
-        <section>
-            <div class="text-area">
-                <textarea rows="10" cols="40" name="news-area" form="news">Haberinizi buraya giriniz...</textarea>
-            </div>
-        </section>
-        <section>
-            <div class="button-area">
+            <p class="subtitle">Haberin gerçek mi sahte mi olduğunu yapay zeka ile analiz et</p>
+        </header>
+
+        <main>
+            <div class="card">
                 <form action="/" id="news" name="news" method="post">
-                    <input type="submit" value="Tespit Et" class="submitButton">
+                    <div class="textarea-wrapper">
+                        <textarea
+                            rows="8"
+                            name="news-area"
+                            placeholder="Analiz etmek istediğiniz haberi buraya yapıştırın..."
+                            spellcheck="false"
+                        ></textarea>
+                    </div>
+
+                    {% if prob %}
+                        <div class="result {% if pred %}result--real{% else %}result--fake{% endif %}">
+                            <span class="result-icon">{% if pred %}✓{% else %}✗{% endif %}</span>
+                            <div class="result-text">
+                                <strong>%{{ prob }}</strong> oranında
+                                <span>{% if pred %}gerçek{% else %}sahte{% endif %} haber</span>
+                            </div>
+                            <div class="result-bar">
+                                <div class="result-bar-fill" style="width: {{ prob }}%"></div>
+                            </div>
+                        </div>
+                    {% elif error %}
+                        <div class="result result--error">
+                            <span class="result-icon">⚠</span>
+                            <span>{{ error }}</span>
+                        </div>
+                    {% endif %}
+
+                    <button type="submit" class="submit-btn">Analiz Et</button>
                 </form>
             </div>
-            <div class="result">
-                {% block content %}
-                    {% if prob %}
-                        {% if pred ==True %}
-                            <p class="real" style="display: flex;justify-content: center; color: green;">Yazdığınız haber %{{prob}} oranında doğru olarak tespit edilmiştir.</p>
-                        {% else %}
-                            <p class="fake" style="display: flex;justify-content: center; color:red;">Yazdığınız haber %{{prob}} oranında sahte olarak tespit edilmiştir.</p>
-                        {% endif %}
-                    {% elif error%}
-                            <p class="error" style="display: flex;justify-content: center;color:red;">{{error}}</p>
-                    {%endif%}
-                {% endblock %}
-            </div>
-        </section>
-        <section>
-            <div class="explanation">
-                <p>Gönderdiğiniz haberi bir yapay zeka modeli kullanarak sahte veya doğru olarak sınıflandırır.
-                Kullanılan model bir LSTM modelidir.Modeli eğitmek için yaklaşık 4500 haber kullanılmıştır.</p>
-            </div>
-        </section>
-    </main>
-    <footer>
-        <p>Atakan Ak tarafından Erciyes Üniversitesi Design Project Ödevi olarak tasarlanmıştır.</p>
-    </footer>
+
+            <p class="info">
+                LSTM modeli · ~4500 haber ile eğitildi · Türkçe içerik
+            </p>
+        </main>
+
+        <footer>
+            <p>Atakan Ak · Erciyes Üniversitesi Design Project</p>
+        </footer>
+    </div>
 </body>
 </html>

@@ -7,7 +7,7 @@ import os
 import random
 
 def daterange(start_date, end_date):
-    for n in range(int ((end_date - start_date).days)):
+    for n in range(int((end_date - start_date).days)):
         yield start_date + timedelta(n)
 
 start_date = date(2019, 5, 4)
@@ -26,7 +26,6 @@ for single_date in daterange(start_date, end_date):
         for pageIndex in pageIndeces:
             try:
                 print(pageIndex)
-                # http://www.hurriyet.com.tr/index/?d=20190522&p=2
                 url = 'http://www.hurriyet.com.tr/index/?d=' + single_date.strftime("%Y%m%d")
                 if pageIndex != '1':
                     url += '&p=' + pageIndex.strip()
@@ -43,10 +42,8 @@ for single_date in daterange(start_date, end_date):
                         id = link[link.rfind('-') + 1:]
 
                         if not os.path.isfile("./Data/Real/" + id + ".txt"):
-                            # http://www.hurriyet.com.tr/gundem/akil-almaz-olay-elini-beline-goturdu-ve-41069985
                             haber = requests.get('http://www.hurriyet.com.tr' + link.strip())
                             haberTree = html.fromstring(haber.content)
-
 
                             title1 = haberTree.xpath('//h1[@class="rhd-article-title"]/text()')
                             title2 = haberTree.xpath('//h1[@class="rhd-article-title-type-2"]/text()')
@@ -64,7 +61,6 @@ for single_date in daterange(start_date, end_date):
 
                             content = " ".join(title1) + " ".join(title2) + " ".join(title3) + " ".join(title4) + " " + " ".join(spot1) + " ".join(spot2) + " " + " ".join(detail1) + " ".join(detail2) + " ".join(detail3) + " ".join(detail4)
                             if content.strip() != "":
-                                # ./Data/Real/41221359.txt
                                 with io.open("./Data/Real/" + id + ".txt", 'w', encoding='utf8') as f:
                                     f.write(content.strip())
 

@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Model & veri dosyaları (büyük binary)
+*.h5
+*.pkl
+src/max_tokens.txt
+clean2.csv
+news_dataset.csv
+src/app/clean.csv
+
+# Claude
+CLAUDE.md
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db

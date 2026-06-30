@@ -2,103 +2,163 @@ import pandas as pd
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, LSTM, Embedding,SpatialDropout1D
-from sklearn.model_selection import train_test_split
+from tensorflow.keras.layers import Dense, LSTM, Embedding, SpatialDropout1D, Dropout
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.optimizers import Adam
 import numpy as np
+import pickle
+import random
+from pathlib import Path
 
+SEED = 42
+random.seed(SEED)
+np.random.seed(SEED)
+import tensorflow as tf
+tf.random.set_seed(SEED)
 
-df = pd.read_csv(r"C:/Users/Atakan/Desktop/Fake-News-Detection-Turkish-main/clean2.csv",encoding="utf8")
+ROOT = Path(__file__).parent.parent.parent
+SRC  = Path(__file__).parent.parent
 
-fake = df.loc[df["Label"]==0]["clean_data"]
-real = df.loc[df["Label"]==1]["clean_data"]
-y_fake = df.loc[df["Label"]==0]["Label"]
-y_real = df.loc[df["Label"]==1]["Label"]
+df = pd.read_csv(ROOT / "clean2.csv", encoding="utf8")
 
-fake_cutoff = int(len(fake)*0.8)
-real_cutoff = int(len(real)*0.8)
+fake  = df.loc[df["Label"] == 0]["clean_data"]
+real  = df.loc[df["Label"] == 1]["clean_data"]
+y_fake = df.loc[df["Label"] == 0]["Label"]
+y_real = df.loc[df["Label"] == 1]["Label"]
 
-fake_train,fake_test = fake[:fake_cutoff],fake[fake_cutoff:]
-real_train,real_test = real[:real_cutoff],real[real_cutoff:]
-y_train=pd.concat([y_fake[:fake_cutoff],y_real[:real_cutoff]])
-y_test=pd.concat([y_fake[fake_cutoff:],y_real[real_cutoff:]])
+fake_cutoff = int(len(fake) * 0.8)
+real_cutoff = int(len(real) * 0.8)
 
+X      = pd.concat([fake[:fake_cutoff], real[:real_cutoff]])
+X_test = pd.concat([fake[fake_cutoff:], real[real_cutoff:]])
+y_train_s = pd.concat([y_fake[:fake_cutoff], y_real[:real_cutoff]])
+y_test    = np.asarray(pd.concat([y_fake[fake_cutoff:], y_real[real_cutoff:]]))
 
-X = pd.concat([fake_train,real_train])
-X_test = pd.concat([fake_test, real_test])
+# fake/real sırasını kır — validation split dengeli olsun
+shuffle_idx = np.random.permutation(len(X))
+X       = X.iloc[shuffle_idx].reset_index(drop=True)
+y_train = np.asarray(y_train_s)[shuffle_idx]
+
 X_egitim = [metin.split() for metin in X]
 
-num_words=1000
-tokenizer = Tokenizer(num_words=num_words) 
+tokenizer_full = Tokenizer()
+tokenizer_full.fit_on_texts(X_egitim)
+vocab_size = len(tokenizer_full.word_index)
+
+word_counts = sorted(tokenizer_full.word_counts.values(), reverse=True)
+cumsum = np.cumsum(word_counts) / sum(word_counts)
+
+print(f"\nToplam vocab boyutu: {vocab_size}")
+print("Coverage analizi:")
+for n in [1000, 2000, 3000, 5000, 8000]:
+    if n <= vocab_size:
+        print(f"  num_words={n:5d} → coverage={cumsum[n-1]*100:.1f}%")
+
+threshold_95 = int(np.searchsorted(cumsum, 0.95)) + 1
+num_words = int(np.ceil(threshold_95 / 1000) * 1000)
+num_words = min(num_words, vocab_size)
+print(f"\n%95 coverage için gereken: {threshold_95} → num_words={num_words} olarak ayarlandı")
+
+raw_dim = num_words ** 0.25
+embedding_dim = next(p for p in [8, 16, 32, 64, 128] if p >= raw_dim)
+print(f"embedding_dim: {num_words}^0.25 ≈ {raw_dim:.1f} → {embedding_dim}")
+
+tokenizer = Tokenizer(num_words=num_words)
 tokenizer.fit_on_texts(X_egitim)
-X_train_token = tokenizer.texts_to_sequences(X_egitim)
-X_test_token = tokenizer.texts_to_sequences(X_test)
-kelime_index = tokenizer.word_index
+
+X_train_tok = tokenizer.texts_to_sequences(X_egitim)
+X_test_tok  = tokenizer.texts_to_sequences(X_test)
+
+lengths    = np.array([len(t) for t in X_train_tok + X_test_tok])
+max_tokens = int(np.mean(lengths) + 2 * np.std(lengths))
+print(f"max_tokens: {max_tokens}\n")
+
+X_train_pad = pad_sequences(X_train_tok, maxlen=max_tokens)
+X_test_pad  = pad_sequences(X_test_tok,  maxlen=max_tokens)
 
 
-# Tüm dataset'indeki vocab (sözlük) kelime sayısı.
-kelime_sayi = len(kelime_index) + 1
+def build_original(num_words, embedding_dim, max_tokens):
+    m = Sequential(name="original_lstm")
+    m.add(Embedding(input_dim=num_words, output_dim=embedding_dim,
+                    input_length=max_tokens, name="embedding"))
+    m.add(SpatialDropout1D(0.2))
+    m.add(LSTM(32, return_sequences=True))
+    m.add(LSTM(16, return_sequences=True))
+    m.add(LSTM(8))
+    m.add(Dense(1, activation="sigmoid"))
+    m.compile(optimizer=Adam(3e-4), loss="binary_crossentropy", metrics=["accuracy"])
+    return m
 
-print('Sözlük boyutu: ', kelime_sayi)
 
-x_train_pad = pad_sequences(X_train_token)
-x_test_pad = pad_sequences(X_test_token)
+def build_optimized(num_words, embedding_dim, max_tokens):
+    m = Sequential(name="optimized_lstm")
+    m.add(Embedding(input_dim=num_words, output_dim=embedding_dim,
+                    input_length=max_tokens, name="embedding"))
+    m.add(SpatialDropout1D(0.3))
+    m.add(LSTM(64))
+    m.add(Dropout(0.3))
+    m.add(Dense(1, activation="sigmoid"))
+    m.compile(optimizer=Adam(3e-4), loss="binary_crossentropy", metrics=["accuracy"])
+    return m
 
 
-embedding_size = 50
-num_tokens = [len(tokens) for tokens in X_train_token + X_test_token]
-num_tokens = np.array(num_tokens)
-max_tokens = np.mean(num_tokens) + 2 * np.std(num_tokens)
-max_tokens = int(max_tokens)
+BATCH_SIZE = 32
 
-x_test_pad = pad_sequences(X_test_token, maxlen=max_tokens)
-X_train_pad = pad_sequences(X_train_token, maxlen=max_tokens)
-
-x_train_pad = np.asarray(x_train_pad)
-y_train = np.asarray(y_train)
-
-model = Sequential()
-model.add(Embedding(
-    input_dim = num_words,
-    output_dim = embedding_size,
-    input_length = max_tokens,
-    name = 'embedding_layer'
-))
-model.add(LSTM(units=32, return_sequences=True))
-model.add(LSTM(units=16, return_sequences=True))
-model.add(LSTM(units=8))
-model.add(Dense(1, activation='sigmoid'))
-
-model.compile(
-    optimizer="adam",
-    loss="binary_crossentropy",
-    metrics=["accuracy"]
+early_stop_original = EarlyStopping(
+    monitor="val_accuracy", patience=2,
+    restore_best_weights=True, verbose=1
 )
 
-model.summary()
-
-result = model.fit(
-        X_train_pad,
-        y_train,
-        epochs=5,
-        batch_size=32,
-        validation_split=0.2
+early_stop_optimized = EarlyStopping(
+    monitor="val_accuracy", patience=3,
+    restore_best_weights=True, verbose=1
 )
 
+print("=" * 50)
+print("Model 1: Original LSTM + SpatialDropout (max 10 epoch, patience=2)")
+print("=" * 50)
+model_original = build_original(num_words, embedding_dim, max_tokens)
+model_original.summary()
+history_original = model_original.fit(
+    X_train_pad, y_train,
+    epochs=10, batch_size=BATCH_SIZE,
+    validation_split=0.2,
+    callbacks=[early_stop_original]
+)
 
-news="instagramda kisa sure bin takipci ulasan burcu oytun basari sirri paylas guzel yaklasik katildik instagram camia ant fenomen hali gelen burcu oytun kisa zaman gelen muthis basari art gercek kamuoyu paylas instagram koyduk fotograf sanatsal deger onem olmadik samimiyet ifade ede oytun tas bay bildik guzel resmen durum aciklik getir basarili guzel takipci sayi basin toplanti adet art sosyal medya gelen platform instagram rekor elde ettik bin takipci ant ilgi odak hali gelen burcu oytun duzenledik basin toplanti seven kamuoyu seslen konusma degerli basin mensup arkadas hooop evet yuzum etek kafa kaldirabil laf edecegiz seklî gazeteci takilarak baslayan oytun hayli neseli yemek foto falan diyerek âdeta doken guzel genc populerlik elde ettik ornek acikla buyrun sabahtan kare ayni yumurta ayni kahvalti mekân kader selvi isimli kullanici paylas like like pardon aha say nazar deg olay asagi yukari gelis dusun bulduk yanit hayvan guzel ahah hay masallah sosyal medya begenilen yuz instagramda fenomen isteyen kullanici seslenme ihmal tabir loser lara fotografcilik kurs gitmek goruntu ayarlamak goster filtre uygulamak secenek oneren burcu oytun deney bil sor instagram kullanici estetik ameliyat secenek dur tip diyerek onemli tavsiye bulun son gazeteci toplu selfie ceken yukleyen deneyimli instagram fenomen basarili filtre kullanim goster oytun bak arkadas buyrun filtre sec siyahbeyaz yap dile gorduk guzel yanim iki arkadas afedersiniz kurbaga isik ayni isik ayni takipci son mesaj verdi ara uzeri arquedesignin hediye nisantasindaki magaza mutlaka ziyaret edin harika model metin firat kuafor yap muhtesem kuafor tesvikiyede kes gidi ayakkabi sponsor"
-tokens = tokenizer.texts_to_sequences(news)
-tokens_pad = pad_sequences(tokens, maxlen=max_tokens)
-y_pred= model.predict(x_test_pad)
+print("\n" + "=" * 50)
+print("Model 2: Optimized LSTM (max 15 epoch, patience=3)")
+print("=" * 50)
+model_optimized = build_optimized(num_words, embedding_dim, max_tokens)
+model_optimized.summary()
+history_optimized = model_optimized.fit(
+    X_train_pad, y_train,
+    epochs=15, batch_size=BATCH_SIZE,
+    validation_split=0.2,
+    callbacks=[early_stop_optimized]
+)
 
-cls_pred = np.array([1.0 if p > 0.5 else 0.0 for p in y_pred])
-cls_true = np.array(y_test)
-incorrect_preds = np.where(cls_pred != cls_true)
-incorrect_preds = incorrect_preds[0]
-print(len(incorrect_preds))
-idx = incorrect_preds[0]
-first_incorrect_pred = X_test.iloc[idx]
-print(first_incorrect_pred)
-model.save("haber_tespit_model.h5")
-loss, accuracy = model.evaluate(x_test_pad, y_test)
-print('Accuracy: %f' % (accuracy*100))
+loss_o, acc_o = model_original.evaluate(X_test_pad, y_test, verbose=0)
+loss_n, acc_n = model_optimized.evaluate(X_test_pad, y_test, verbose=0)
 
+print("\n" + "=" * 50)
+print("TEST SONUÇLARI")
+print("=" * 50)
+print(f"  Original  → loss: {loss_o:.4f}  accuracy: {acc_o*100:.2f}%")
+print(f"  Optimized → loss: {loss_n:.4f}  accuracy: {acc_n*100:.2f}%")
+
+val_acc_o = history_original.history["val_accuracy"]
+val_acc_n = history_optimized.history["val_accuracy"]
+print(f"\n  Original  val_accuracy per epoch:  {[round(v*100,1) for v in val_acc_o]}")
+print(f"  Optimized val_accuracy per epoch:  {[round(v*100,1) for v in val_acc_n]}")
+
+model_original.save(SRC / "haber_tespit_model.h5")
+model_optimized.save(SRC / "optimized_model.h5")
+
+with open(SRC / "tokenizer.pkl", "wb") as f:
+    pickle.dump(tokenizer, f)
+
+with open(SRC / "max_tokens.txt", "w") as f:
+    f.write(str(max_tokens))
+
+print(f"\nModeller kaydedildi → {SRC}")
