@@ -1,5 +1,5 @@
 from tensorflow.keras.models import load_model
-from model.preprocess import remove_punctuation, get_stem, change_correct, stop_word, turkish_char, greater_n
+from model.preprocess import remove_punctuation, get_stem, stop_word, turkish_char, greater_n
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 import warnings
 import numpy as np
@@ -20,11 +20,10 @@ with open(SRC / "max_tokens.txt") as f:
 
 
 def preprocess(text):
+    text = turkish_char(text)
     text = remove_punctuation(text)
-    text = change_correct(text)
     text = get_stem(text)
     text = stop_word(text)
-    text = turkish_char(text)
     text = greater_n(text)
     return text
 
